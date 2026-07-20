@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+            text-align: center;
+            background-color: #f5f7fb;
+            color: #333;
+        
+        }
+        h1 {color: #2b6cb0;}
+        img {border: radius 50px; }          /*make the photo a circle*/
+        ul    {list-style: none; padding: 0;}
+        li    {margin: 6px 0; font-size: 18px;}
+        table { margin: 20px auto; width: 100%; border-collapse: collapse; }
+        th , td { border: 1px solid #cbd5e0; padding: 8px  16px;  }
+        th { background-color: #2b6cb0; color: white; }
+    </style>
+</head>
+<body>
+<h1> Hi, I'm Mohamed</h1>
+<img src="https://picsum.photos/200" alt="A photo of me" idth="200"
+<p> I'm 16 years old and i live in Stockholm. This summer I'm learning to build websites!</p>
+<h2> My hobbies</h2>
+<ul>
+    <li>Playing football</li>
+    <li>Playing video games</li>
+    <li>Watching movies</li>
+    <li>Listening to music</li>
+</ul>
+<h2>Languages I speak</h2>
+<table>
+    <tr>
+        <th>Language</th>
+        <th>level</th>
+    </tr>
+    <tr>
+        <td>Swedish</td>
+        <td>Native</td>
+    </tr>
+    <tr>
+        <td>English</td>
+        <td>Fluent</td>
+    </tr>
+    <tr>
+        <td>Arabic</td>
+        <td>native</td>
+    </tr>
+    <tr>
+        <td>German</td>
+        <td>intermediate</td>
+    </tr>
+</table>
+<p>
+     check out my code on
+    <a href="https://github.com/mohamedkhalid" target="_blank">GitHub</a>
+</p>
+<button onclick="showfunfact()">Click me for a fun fact about me!</button>
+<p  id="fact"</p>
+<script>
+    function showfunfact() {
+        document.getElementById("fact").innerHTML = "I love to play football and my favorite team is Real Madrid!";
+    }
+</script>
+</body>
+</html>
