@@ -1,1 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Student City Assistant</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 24px auto;
+        padding: 0 16px;
+        line-height: 1.4;
+      }
+      section {
+        border-top: 1px solid #ccc;
+        margin-top: 20px;
+        padding-top: 12px;
+      }
+      input, select { margin-left: 8px; padding: 4px; }
+      button { padding: 6px 12px; }
+      .item { padding: 8px 0; border-bottom: 1px solid #eee; }
+    </style>
+  </head>
+  <body>
+    <h1>New Student City Assistant</h1>
+    <p>One place for jobs, transport, and basic city facts.</p>
 
+    <label>
+      City
+      <select id="city">
+        <option>Stockholm</option>
+        <option>Göteborg</option>
+        <option>Malmö</option>
+        <option>Uppsala</option>
+        <option>Linköping</option>
+        <option>Örebro</option>
+        <option>Västerås</option>
+      </select>
+    </label>
+    <br><br>
+
+    <label>
+      Trafiklab API key (optional until Section B)
+      <input id="trafiklabKey" type="password" autocomplete="off" placeholder="accessId">
+    </label>
+    <br><br>
+
+    <label>
+      Apiverket token (optional until Section C)
+      <input id="apiverketToken" type="password" value="sk_test_demo" autocomplete="off">
+    </label>
+    <br><br>
+
+    <button id="loadBtn">Load city overview</button>
+    <p id="status">Choose a city and load the overview.</p>
+
+    <section id="jobsSection">
+      <h2>1. Jobs</h2>
+      <div id="jobs"></div>
+    </section>
+
+    <section id="transportSection">
+      <h2>2. Transport</h2>
+      <div id="transport"></div>
+    </section>
+
+    <section id="factsSection">
+      <h2>3. City facts</h2>
+      <div id="facts"></div>
+    </section>
+
+    <section>
+      <h2>Summary</h2>
+      <p id="summary"></p>
+    </section>
+
+    <script>
+      const JOB_API = "https://jobsearch.api.jobtechdev.se/search";
+      const RESROBOT = "https://api.resrobot.se/v2.1";
+      const POP_API = "https://apiverket.se/v1/population";
+
+      // LOCAL DEMO ONLY — do not push real keys to GitHub
+      const TRAFIKLAB_KEY = "077a280e-75e4-47e3-9ef8-bf9fb13de4a6";
+      const APIVERKET_TOKEN = "sk_test_demo";
+
+      function getCity() {
+        return document.getElementById("city").value;
+      }
+
+      async function loadJobs(city) {
+        const query = "student " + city;
+        const url = JOB_API + "?q=" + encodeURIComponent(query) + "&limit=10";
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Jobs API error: " + response.status);
+        const data = await response.json();
+        return data.hits || [];
+      }
+
+      function showJobs(hits) {
+        const el = document.getElementById("jobs");
+        if (!hits.length) {
+          el.innerHTML = "<p>No jobs found for this city search.</p>";
+          return;
+        }
+        let html = "";
+        hits.forEach(function (job) {
+          const title = job.headline || "No title";
+          const employer = (job.employer && job.employer.name) || "Unknown";
+          const deadline = job.application_deadline || "Not available";
+          const link = job.webpage_url || "";
+          html +=
+            '<div class="item">' +
+            "<p><strong>" + title + "</strong></p>" +
+            "<p>" + employer + " · deadline: " + deadline + "</p>" +
+            (link ? '<p><a href="' + link + '" target="_blank" rel="noopener">Open ad</a></p>' : "") +
+            "</div>";
+        });
+        el.innerHTML = html;
+      }
+
+      function extractStops(data) {
+        const stops = [];
+        if (Array.isArray(data.stopLocationOrCoordLocation)) {
+          for (const item of data.stopLocationOrCoordLocation) {
+            if (item.StopLocation) stops.push(item.StopLocation);
+          }
+        } else if (Array.isArray(data.StopLocation)) {
+          for (const s of data.StopLocation) stops.push(s);
+        }
+        return stops;
+      }
+
+      async function findStop(name, apiKey) {
+        const url =
+          RESROBOT +
+          "/location.name?input=" + encodeURIComponent(name) +
+          "&format=json&accessId=" + encodeURIComponent(apiKey);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Stop lookup failed: " + response.status);
+        const data = await response.json();
+        const stops = extractStops(data);
+        if (!stops.length) throw new Error("No stop found for " + name);
+        return { name: stops[0].name, extId: stops[0].extId || stops[0].id };
+      }
+
+      async function planTrip(originId, destId, apiKey) {
+        const url =
+          RESROBOT +
+          "/trip?format=json&originId=" + encodeURIComponent(originId) +
+          "&destId=" + encodeURIComponent(destId) +
+          "&passlist=true&accessId=" + encodeURIComponent(apiKey);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Trip failed: " + response.status);
+        return response.json();
+      }
+
+      async function loadTransport(city) {
+        const apiKey = TRAFIKLAB_KEY;
+        const el = document.getElementById("transport");
+        if (!apiKey) {
+          el.innerHTML = "<p>Paste a Trafiklab key to load transport.</p>";
+          return null;
+        }
+
+        const stop = await findStop(city, apiKey);
+        const stockholmId = "740000001";
+        const originId = stop.extId;
+        const destId = stop.extId === stockholmId ? "740000003" : stockholmId;
+        const tripData = await planTrip(originId, destId, apiKey);
+
+        let trips = tripData.Trip;
+        if (!trips) {
+          el.innerHTML = "<p>Stop found, but no trip options.</p>";
+          return stop;
+        }
+        if (!Array.isArray(trips)) trips = [trips];
+        const trip = trips[0];
+        const origin = trip.Origin || {};
+        const destination = trip.Destination || {};
+
+        el.innerHTML =
+          "<p><strong>Main stop:</strong> " + stop.name + " (extId: " + stop.extId + ")</p>" +
+          "<p><strong>Example route:</strong> " + (origin.name || "") + " → " + (destination.name || "") + "</p>" +
+          "<p><strong>Departure:</strong> " + (origin.time || "") + " · <strong>Arrival:</strong> " + (destination.time || "") + "</p>" +
+          "<p><strong>Duration:</strong> " + (trip.duration || "n/a") + "</p>";
+
+        return stop;
+      }
+
+      async function loadFacts(city) {
+        const token = APIVERKET_TOKEN;
+        const el = document.getElementById("facts");
+        if (!token) {
+          el.innerHTML = "<p>Paste an Apiverket token to load facts.</p>";
+          return;
+        }
+
+        const response = await fetch(POP_API, {
+          headers: { Authorization: "Bearer " + token }
+        });
+        if (!response.ok) throw new Error("Facts API error: " + response.status);
+        const payload = await response.json();
+        console.log("population payload", payload);
+
+        let rows = payload.data;
+        if (!Array.isArray(rows)) rows = [];
+        const match = rows.find(function (row) {
+          const text = JSON.stringify(row).toLowerCase();
+          return text.indexOf(city.toLowerCase()) !== -1;
+        });
+
+        if (match) {
+          el.innerHTML =
+            "<p>Found a data row related to <strong>" + city + "</strong>.</p>" +
+            "<pre>" + JSON.stringify(match, null, 2) + "</pre>" +
+            "<p>Interpret one number from this row in your summary.</p>";
+        } else {
+          el.innerHTML =
+            "<p>Loaded population dataset, but no obvious row for " + city + ".</p>" +
+            "<p>Open the Console, inspect <code>data</code>, and adapt this section (or describe the dataset generally).</p>";
+        }
+      }
+
+      async function loadCityOverview() {
+        const city = getCity();
+        document.getElementById("status").textContent = "Loading overview for " + city + "…";
+        document.getElementById("jobs").innerHTML = "";
+        document.getElementById("transport").innerHTML = "";
+        document.getElementById("facts").innerHTML = "";
+
+        let jobCount = 0;
+        let transportNote = "not loaded";
+        let factsNote = "not loaded";
+
+        try {
+          const hits = await loadJobs(city);
+          jobCount = hits.length;
+          showJobs(hits);
+        } catch (e) {
+          document.getElementById("jobs").innerHTML = "<p>" + e.message + "</p>";
+        }
+
+        try {
+          const stop = await loadTransport(city);
+          transportNote = stop ? stop.name : "skipped/failed";
+        } catch (e) {
+          document.getElementById("transport").innerHTML = "<p>" + e.message + "</p>";
+          transportNote = "error";
+        }
+
+        try {
+          await loadFacts(city);
+          factsNote = "loaded";
+        } catch (e) {
+          document.getElementById("facts").innerHTML = "<p>" + e.message + "</p>";
+          factsNote = "error";
+        }
+
+        document.getElementById("status").textContent = "Overview finished for " + city + ".";
+        document.getElementById("summary").textContent =
+          city + " overview — jobs: " + jobCount +
+          "; transport: " + transportNote +
+          "; facts: " + factsNote +
+          ". This assistant helps new students explore a Swedish city in one page.";
+      }
+
+      document.getElementById("loadBtn").addEventListener("click", loadCityOverview);
+    </script>
+  </body>
+</html>
